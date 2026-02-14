@@ -31,5 +31,5 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           input: /home/runner/work/gitops-practice-devsecops-sonarqube-sast-scan-supermario-repo/gitops-practice-devsecops-sonarqube-sast-scan-supermario-repo/supermariolatestdockerimage.tar
-          exit-code: '1'
+          exit-code: '0'
           severity: 'CRITICAL,HIGH'

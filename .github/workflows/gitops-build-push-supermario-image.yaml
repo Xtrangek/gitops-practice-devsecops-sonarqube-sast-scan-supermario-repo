@@ -19,5 +19,6 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
-            docker build -t docker.io/xtrange/spmgitopsproject:1 -f app/Dockerfile app
+            ls -la
+            docker build -t docker.io/xtrange/spmgitopsproject:1 .
             docker push docker.io/xtrange/spmgitopsproject:1

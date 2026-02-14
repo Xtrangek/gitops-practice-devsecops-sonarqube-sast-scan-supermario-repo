@@ -12,7 +12,7 @@ spec:
       labels:
         app: supermariogame
     spec:
-      Container:
+      containers:
       - image: xtrange/spmgitopsproject:2
         name: supermariogame-container
         ports:

@@ -1,0 +1,155 @@
+name: "Run SAST, Build & Push supermario image, Scan image, Update deployment and version files"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sonarqube_sast_scan:
+    # Evita correr el pipeline cuando el commit es del bot con [skip ci]
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  build_push_supermario_docker_image:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    needs: sonarqube_sast_scan
+
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      build_tag: ${{ steps.tags.outputs.build_tag }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute VERSION from version.txt (increment)
+        id: ver
+        shell: bash
+        run: |
+          if [[ ! -f version.txt ]]; then echo "0" > version.txt; fi
+          CURR="$(tr -d ' \n\r\t' < version.txt)"
+          if [[ -z "$CURR" ]]; then CURR="0"; fi
+          if ! [[ "$CURR" =~ ^[0-9]+$ ]]; then
+            echo "version.txt must contain only an integer. Current: '$CURR'"
+            exit 1
+          fi
+          NEXT=$((CURR + 1))
+          echo "VERSION=$NEXT" >> "$GITHUB_ENV"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Computed VERSION=$NEXT"
+
+      - name: Define additional immutable tag (not latest)
+        id: tags
+        shell: bash
+        run: |
+          BUILD_TAG="build-${GITHUB_RUN_NUMBER}"
+          echo "BUILD_TAG=$BUILD_TAG" >> "$GITHUB_ENV"
+          echo "build_tag=$BUILD_TAG" >> "$GITHUB_OUTPUT"
+          echo "Computed BUILD_TAG=$BUILD_TAG"
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            docker.io/xtrange/spmgitopsproject:${{ env.VERSION }}
+            docker.io/xtrange/spmgitopsproject:${{ env.BUILD_TAG }}
+
+  run_container_image_scan_on_supermario_docker_image:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    needs: build_push_supermario_docker_image
+
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull image and save tar (scan VERSION tag)
+        shell: bash
+        run: |
+          IMAGE="docker.io/xtrange/spmgitopsproject:${{ needs.build_push_supermario_docker_image.outputs.version }}"
+          docker pull "$IMAGE"
+          docker save -o supermarioimage.tar "$IMAGE"
+
+      - name: Run Trivy vulnerability scanner (tarball mode)
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: /github/workspace/supermarioimage.tar
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+  update_k8s_yaml_version_file_with_latest_image_tag:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    needs: run_container_image_scan_on_supermario_docker_image
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Git Config
+        shell: bash
+        run: |
+          git config user.email "${{ secrets.GIT_EMAIL }}"
+          git config user.name "${{ secrets.GIT_USERNAME }}"
+
+      - name: Update Deployment YAML and version.txt
+        shell: bash
+        run: |
+          # Mantén el repo actualizado
+          git pull --rebase origin main
+
+          VERSION="$(cat version.txt | tr -d ' \n\r\t')"
+          if [[ -z "$VERSION" ]]; then VERSION="0"; fi
+          if ! [[ "$VERSION" =~ ^[0-9]+$ ]]; then
+            echo "version.txt must contain only an integer. Current: '$VERSION'"
+            exit 1
+          fi
+
+          NEXT=$((VERSION + 1))
+
+          # Actualiza deployment.yaml a tu imagen + nuevo tag numérico
+          sed -i "s|image: xtrange/spmgitopsproject:.*$|image: xtrange/spmgitopsproject:${NEXT}|" deployment.yaml
+
+          # Actualiza version.txt
+          echo "${NEXT}" > version.txt
+
+          git add deployment.yaml version.txt
+          git commit -m "chore: update deployment + version to ${NEXT} [skip ci]" || echo "No changes to commit"
+          git push origin main

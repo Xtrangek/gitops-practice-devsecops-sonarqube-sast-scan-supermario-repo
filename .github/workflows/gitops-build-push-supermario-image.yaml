@@ -27,10 +27,10 @@
 # #            docker push docker.io/xtrange/spmgitopsproject:1
 name: "Build and Push SM Docker image with dynamic tag to Docker HUB FIXED ARM/AMD"
 
-on:
-  push:
-    branches:
-      - main
+# on:
+#   push:
+#     branches:
+#       - main
 
 jobs:
   build_push_supermario_docker_image:

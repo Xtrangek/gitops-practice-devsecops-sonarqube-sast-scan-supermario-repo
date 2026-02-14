@@ -105,6 +105,7 @@ jobs:
           docker pull "$IMAGE"
           docker save -o supermarioimage.tar "$IMAGE"
           ls -la 
+          pwd
 
       - name: Run Trivy vulnerability scanner (tarball mode)
         uses: aquasecurity/trivy-action@master

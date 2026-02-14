@@ -16,7 +16,7 @@ spec:
       - image: xtrange/spmgitopsproject:2
         name: supermariogame-container
         ports:
-        - contianerPort: 8080
+        - containerPort: 8080
 
 ---
 apiVersion: v1

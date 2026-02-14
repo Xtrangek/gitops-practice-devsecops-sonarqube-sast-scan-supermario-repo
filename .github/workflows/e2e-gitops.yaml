@@ -84,7 +84,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: |
             docker.io/xtrange/spmgitopsproject:${{ env.VERSION }}
-            docker.io/xtrange/spmgitopsproject:${{ env.BUILD_TAG }}
+           
 
   run_container_image_scan_on_supermario_docker_image:
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}

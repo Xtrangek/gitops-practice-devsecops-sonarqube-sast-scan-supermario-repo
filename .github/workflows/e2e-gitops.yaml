@@ -104,6 +104,7 @@ jobs:
           IMAGE="docker.io/xtrange/spmgitopsproject:${{ needs.build_push_supermario_docker_image.outputs.version }}"
           docker pull "$IMAGE"
           docker save -o supermarioimage.tar "$IMAGE"
+          ls -la 
 
       - name: Run Trivy vulnerability scanner (tarball mode)
         uses: aquasecurity/trivy-action@master

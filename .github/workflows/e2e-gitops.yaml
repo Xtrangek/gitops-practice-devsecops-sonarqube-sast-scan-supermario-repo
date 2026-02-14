@@ -108,7 +108,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (tarball mode)
         uses: aquasecurity/trivy-action@master
         with:
-          input: /github/workspace/supermarioimage.tar
+          input: /home/runner/work/gitops-practice-devsecops-sonarqube-sast-scan-supermario-repo/gitops-practice-devsecops-sonarqube-sast-scan-supermario-repo/supermariolatestdockerimage.tar
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
 

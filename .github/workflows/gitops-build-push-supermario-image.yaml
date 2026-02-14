@@ -1,27 +1,99 @@
-#name: "Build and push SMDocker image with static tag to Docker Hub"
-name: "Build and Push SM Docker image with dynamic tag to Docker HUB"
+# #name: "Build and push SMDocker image with static tag to Docker Hub"
+# name: "Build and Push SM Docker image with dynamic tag to Docker HUB"
 # on:
 #   push:
 #     branches:
-#       - main
-env:
-  VERSION: $(( $(cat version.txt) + 1 ))
+#     - main
+# env:
+#   VERSION: $(( $(cat version.txt) + 1 ))
+
+# jobs:
+
+#   build_push_supermario_docker_image:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v3
+
+#       - name: Login to Docker Hub
+#         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+#       - name: Build and Push Docker image
+#         run: |
+#             docker build -t docker.io/xtrange/spmgitopsproject:${{ env.VERSION }} .
+#             docker push docker.io/xtrange/spmgitopsproject:${{ env.VERSION }} 
+# #            docker build -t docker.io/xtrange/spmgitopsproject:1 .
+# #            docker push docker.io/xtrange/spmgitopsproject:1
+name: "Build and Push SM Docker image with dynamic tag to Docker HUB FIXED ARM/AMD"
+
+on:
+  push:
+    branches:
+      - main
 
 jobs:
-
   build_push_supermario_docker_image:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute VERSION from version.txt (increment)
+        id: ver
+        shell: bash
+        run: |
+          if [[ ! -f version.txt ]]; then
+            echo "version.txt not found, creating with 1"
+            echo "1" > version.txt
+          fi
+
+          CURR="$(tr -d ' \n\r\t' < version.txt)"
+          if [[ -z "$CURR" ]]; then CURR="0"; fi
+          if ! [[ "$CURR" =~ ^[0-9]+$ ]]; then
+            echo "version.txt must contain only an integer. Current: '$CURR'"
+            exit 1
+          fi
+
+          NEXT=$((CURR + 1))
+          echo "$NEXT" > version.txt
+
+          echo "VERSION=$NEXT" >> "$GITHUB_ENV"
+          echo "Computed VERSION=$NEXT"
+
+      - name: Commit updated version.txt
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add version.txt
+          git commit -m "chore: bump version to $VERSION" || echo "No changes to commit"
+
+      - name: Push version bump commit
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          git push
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Build and Push Docker image
-        run: |
-            docker build -t docker.io/xtrange/spmgitopsproject:${{ env.VERSION }} .
-            docker push docker.io/xtrange/spmgitopsproject:${{ env.VERSION }} 
-#            docker build -t docker.io/xtrange/spmgitopsproject:1 .
-#            docker push docker.io/xtrange/spmgitopsproject:1
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker image (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile   # si tu archivo aún se llama DockerFile, cambia esto a ./DockerFile
+          push: true
+          tags: |
+            docker.io/xtrange/spmgitopsproject:${{ env.VERSION }}
+            docker.io/xtrange/spmgitopsproject:latest
+          platforms: linux/amd64,linux/arm64

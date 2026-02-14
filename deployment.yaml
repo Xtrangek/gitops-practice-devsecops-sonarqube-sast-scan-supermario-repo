@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: supermariogame-deployment
+  name: supermariogame-deployment 
 spec:
   replicas: 1
   selector:
@@ -12,7 +12,7 @@ spec:
       labels:
         app: supermariogame
     spec:
-      containers:
+      Container:
       - image: xtrange/spmgitopsproject:2
         name: supermariogame-container
         ports:
